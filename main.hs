@@ -1,4 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 import           Data.Text
+
+-- Tem que programar o teste?
+-- 
 
 -- Operadores ; | U | * | ?
 -- Uma expressão pode ser terminal, um teste, uma escolha ou um interador
@@ -18,37 +22,55 @@ instance Show Operator where
   show Iteration = "*"
   show Test = "?"
 
+
 data Operator = Sequencial
               | Choice
               | Iteration
               | Test
 
 -- Uma transição entre estados e a expressão que revela essa transição
-newtype Transition = Transitions [(State, State, Expression)]
+type Transition = [(State, State, Expression)] -- Uma Transição só pode ser feita com expressões nucleares (simples)
 
 -- Um estado de uma transição
 type State = String
 
--- Aqui a gente vai separar o programa em programas menores
--- Quando achar os aspas chamanado a função recursivamente
-getProgram program = do
-  print program
 
-getOperator :: Expression -> Maybe Operator
-getOperator (Binary op _ _) = Just op
-getOperator (Uni op _) = Just op
-getOperator (Nuclear _) = Nothing
+validateProgram :: Transition -> Expression -> Bool
+validateProgram [] _ = True
+validateProgram t e = checkForExpression t e
 
-main :: IO ()
+-- Vê se uma certa transição está representada por uma expressão
+-- Comando any
+-- Pattern matching a partir de um estado.
+checkForExpression :: Transition -> Expression -> Bool
+checkForExpression [] _ = False
+checkForExpression ((a, b, Nuclear i1):ts) (Nuclear i2) = i1 == i2
+checkForExpression t (Uni Test _) = True
+checkForExpression t (Binary Test _ i) = checkForExpression t i
+checkForExpression t (Binary Choice i1 i2) = checkForExpression t i1 || checkForExpression t i2
+checkForExpression t (Uni Iteration i) =  checkForExpression t i
+checkForExpression (t:ts) (Binary Sequencial i1 i2) = checkForExpression (t:ts) i1 && checkForExpression ts i2
+
+readOperator ::  String -> Maybe Operator
+readOperator ";" = Just Sequencial
+readOperator "?" = Just Test
+readOperator "*" = Just Iteration
+readOperator "U" = Just Choice
+readOperator _ = Nothing
+
+checkForNextTransition :: Transition -> State -> Int -> Maybe Int
+checkForNextTransition [] _ _ = Nothing
+checkForNextTransition ((a, _, _):ts) s i = if a == s then Just i else checkForNextTransition ts s (i+1)
+
+
+-- 1 -> 2, 3-> 4
+
 main = do
   -- A U B
-  let programA = Binary Choice (Nuclear "A") (Nuclear "B")
+  -- let program = Binary Choice (Nuclear "A") (Nuclear "B")
   -- A U (A ; B)
-  let programB = Binary
-        Choice
-        (Nuclear "A")
-        (Binary Sequencial (Nuclear "A") (Nuclear "B"))
-  putStrLn "State your program:"
-  let tree = Transitions [("A", "B", Nuclear "A"), ("B", "C", Nuclear "B")]
-  program <- getLine
-  getProgram program
+  -- let program = Binary Choice (Nuclear "A") (Binary Sequencial (Nuclear "A") (Nuclear "B"))
+  -- (A?;(A;B))*;B -- O teste seguido por um sequêncial (?;) será traduzido em um único operador binário (?)
+  let program = Binary Sequencial (Uni Iteration (Binary Test (Nuclear "A") (Binary Sequencial (Nuclear "A") (Nuclear "B")))) (Nuclear "B")-- Abuso de notação
+  let tree = [("1", "2", Nuclear "A"),("2", "3", Nuclear "B")] -- Não funciona
+  print (validateProgram tree program)
