@@ -44,8 +44,9 @@ type State = String
 
 validateProgram :: [Transition] -> Expression -> Bool
 validateProgram [] _ = True
-validateProgram ((s0, s1, e):ts) expression = isOnProgram
-  (checkForExpression ((s0, s1, e):ts) expression (Just (s0, s1, e)))
+validateProgram ((s0, s1, e):ts) expression = 
+  let t = ((s0, s1, e):ts)
+  in isOnProgram (checkForExpression t expression (getFirstTransition e t))
 
 
 -- Vê se uma certa transição está representada por uma expressão
@@ -84,6 +85,30 @@ deleteTransition :: [Transition] -> Maybe Transition -> [Transition]
 deleteTransition tx Nothing = tx
 deleteTransition tx (Just t) = delete t tx
 
+getFirstExpression :: Expression -> Maybe [Identifier]
+getFirstExpression (Binary Sequencial e1 _) = getFirstExpression e1
+getFirstExpression (Binary Choice e1 e2) = 
+  let
+    (Just firstResult) = getFirstExpression e1
+    (Just secondResult) = getFirstExpression e2
+  in
+    Just (firstResult ++ secondResult)
+getFirstExpression (Uni Iteration e1) = getFirstExpression e1
+getFirstExpression (Uni Test e1) = getFirstExpression e1
+getFirstExpression (Nuclear i) = Just [i]
+getFirstExpression _ = Nothing
+
+
+getFirstTransition :: Expression ->  [Transition] -> Maybe Transition
+getFirstTransition e []  = Nothing
+getFirstTransition e ((current,next,Nuclear by):ts) =
+  let Just firstNuclear = getFirstExpression e
+  in if by `elem` firstNuclear
+      then Just (current, next, Nuclear by)
+      else  getFirstTransition e ts
+    
+
+
 getNextTransition :: [Transition] -> Maybe State -> Maybe Transition
 getNextTransition [] _ = Nothing
 getNextTransition (t:ts) Nothing = Just t
@@ -113,12 +138,12 @@ main = do
   -- A U (A ; B)
   -- let program = Binary Choice (Nuclear "A") (Binary Sequencial (Nuclear "A") (Nuclear "B"))
   -- (A?;(A;B))*;B -- O teste seguido por um sequêncial (?;) será traduzido em um único operador binário (?)
-  let program =  Binary Choice (Nuclear "A") (Nuclear "B")
+  let program =  Binary Sequencial (Binary Choice (Nuclear "A") (Nuclear "B")) (Nuclear "B") -- Esse caso tá crashando 
   -- print "Describe your program:"
   -- print "Describe your program:"
   -- rProgram <- getLine
   -- let program = read rProgram :: Expression
-  let tree = [("1", "2", Nuclear "A")] -- Não funciona
+  let tree = [("2", "3", Nuclear "B") ,("1", "2", Nuclear "B")]
   -- print "Write your transitions:"
   -- rTree <- getLine
   -- let tree = read rTree :: Transition
