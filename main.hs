@@ -37,21 +37,24 @@ instance Show Operator where
 
 
 -- Uma transição entre estados e a expressão que revela essa transição
-type Transition = (State, State, Expression) -- Uma Transição só pode ser feita com expressões nucleares (simples)
+type Transition = (State, State, Expression)-- Uma Transição só pode ser feita com expressões nucleares (simples)
 
 -- Um estado de uma transição
 type State = String
 
 validateProgram :: [Transition] -> Expression -> Bool
 validateProgram [] _ = True
-validateProgram ((s0, s1, e):ts) expression = 
-  let t = ((s0, s1, e):ts)
-  in isOnProgram (checkForExpression t expression (getFirstTransition e t))
+validateProgram ((s0, s1, e):ts) expression =
+  let
+    t = ((s0, s1, e):ts)
+    first = getFirstTransition e t
+  in isOnProgram (checkForExpression t expression first)
 
 
 -- Vê se uma certa transição está representada por uma expressão
 checkForExpression :: [Transition] -> Expression -> Maybe Transition -> ExpressionAnalisys
 checkForExpression [] _ _ = Result False Nothing
+checkForExpression _ _ Nothing = Result False Nothing
 checkForExpression t (Nuclear idExpression) (Just (s,sNext,Nuclear i)) =
   let current = Just (s, sNext, Nuclear i)
       e = Nuclear idExpression
@@ -87,7 +90,7 @@ deleteTransition tx (Just t) = delete t tx
 
 getFirstExpression :: Expression -> Maybe [Identifier]
 getFirstExpression (Binary Sequencial e1 _) = getFirstExpression e1
-getFirstExpression (Binary Choice e1 e2) = 
+getFirstExpression (Binary Choice e1 e2) =
   let
     (Just firstResult) = getFirstExpression e1
     (Just secondResult) = getFirstExpression e2
@@ -100,13 +103,12 @@ getFirstExpression _ = Nothing
 
 
 getFirstTransition :: Expression ->  [Transition] -> Maybe Transition
-getFirstTransition e []  = Nothing
 getFirstTransition e ((current,next,Nuclear by):ts) =
   let Just firstNuclear = getFirstExpression e
   in if by `elem` firstNuclear
       then Just (current, next, Nuclear by)
       else  getFirstTransition e ts
-    
+
 
 
 getNextTransition :: [Transition] -> Maybe State -> Maybe Transition
@@ -137,13 +139,13 @@ main = do
   -- let program = Binary Choice (Nuclear "A") (Nuclear "B")
   -- A U (A ; B)
   -- let program = Binary Choice (Nuclear "A") (Binary Sequencial (Nuclear "A") (Nuclear "B"))
-  -- (A?;(A;B))*;B -- O teste seguido por um sequêncial (?;) será traduzido em um único operador binário (?)
+  -- (A?;(A;B))*;B
   let program =  Binary Sequencial (Binary Choice (Nuclear "A") (Nuclear "B")) (Nuclear "B") -- Esse caso tá crashando 
   -- print "Describe your program:"
   -- print "Describe your program:"
   -- rProgram <- getLine
   -- let program = read rProgram :: Expression
-  let tree = [("2", "3", Nuclear "B") ,("1", "2", Nuclear "B")]
+  let tree = [("2", "3", Nuclear "B"),("1", "2", Nuclear "A")]
   -- print "Write your transitions:"
   -- rTree <- getLine
   -- let tree = read rTree :: Transition
