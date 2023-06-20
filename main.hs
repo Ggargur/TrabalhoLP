@@ -47,8 +47,9 @@ validateProgram [] _ = True
 validateProgram ((s0, s1, e):ts) expression =
   let
     t = ((s0, s1, e):ts)
-    first = getFirstTransition e t
-  in isOnProgram (checkForExpression t expression first)
+    Just (first:tail) = getFirstTransition e t
+  in
+     (isOnProgram (checkForExpression t expression (Just first)) || ((tail /= []) && validateProgram tail expression))
 
 
 -- Vê se uma certa transição está representada por uma expressão
@@ -56,31 +57,35 @@ checkForExpression :: [Transition] -> Expression -> Maybe Transition -> Expressi
 checkForExpression [] _ _ = Result False Nothing
 checkForExpression _ _ Nothing = Result False Nothing
 checkForExpression t (Nuclear idExpression) (Just (s,sNext,Nuclear i)) =
-  let current = Just (s, sNext, Nuclear i)
-      e = Nuclear idExpression
-      isTransitionValid = i == idExpression
-      newTransitions = deleteTransition t current
-  in Result ( isTransitionValid &&  isJust current) (Just newTransitions)
+  let 
+    current = Just (s, sNext, Nuclear i)
+    e = Nuclear idExpression
+    isTransitionValid = i == idExpression
+    newTransitions = deleteTransition t current
+  in 
+    Result ( isTransitionValid &&  isJust current) (Just newTransitions)
 checkForExpression t (Binary Sequencial e1 e2) (Just (s,sNext, i)) =
-  let currentResult = checkForExpression t e1 (Just (s,sNext, i))
-      nextResult = checkForExpression t e2 (getNextTransition t (Just sNext))
-      isTransitionValid = isOnProgram currentResult && isOnProgram nextResult
-      newTransitions = intersectTransitions
-        (stateTransition currentResult)
-        (stateTransition nextResult)
+  let 
+    currentResult = checkForExpression t e1 (Just (s,sNext, i))
+    nextResult = checkForExpression t e2 (getNextTransition t (Just sNext))
+    isTransitionValid = isOnProgram currentResult && isOnProgram nextResult
+    newTransitions = intersectTransitions (stateTransition currentResult) (stateTransition nextResult)
   in Result isTransitionValid (Just newTransitions)
 checkForExpression t (Binary Choice e1 e2) s =
-  let result1 = checkForExpression t e1 s
-      result2 = checkForExpression t e2 s
-      isTransitionValid = isOnProgram result1 || isOnProgram result2
-      newTransitions =
-        unionTransitions (stateTransition result1) (stateTransition result2)
+  let 
+    result1 = checkForExpression t e1 s
+    result2 = checkForExpression t e2 s
+    isTransitionValid = isOnProgram result1 || isOnProgram result2
+    newTransitions =
+      unionTransitions (stateTransition result1) (stateTransition result2)
   in Result isTransitionValid (Just newTransitions)
 checkForExpression t (Uni Iteration e1) s =
-  let result = checkForExpression t e1 s
-      isTransitionValid = isOnProgram result
-      newTransitions = stateTransition result
-  in Result isTransitionValid newTransitions
+  let 
+    result = checkForExpression t e1 s
+    isTransitionValid = isOnProgram result
+    newTransitions = stateTransition result
+  in 
+    Result isTransitionValid newTransitions
 checkForExpression ((a,b,i):ts) (Uni Test e1) s =
   Result (a==b) (Just ((a,b,i):ts))
 
@@ -102,14 +107,18 @@ getFirstExpression (Nuclear i) = Just [i]
 getFirstExpression _ = Nothing
 
 
-getFirstTransition :: Expression ->  [Transition] -> Maybe Transition
-getFirstTransition e ((current,next,Nuclear by):ts) =
-  let Just firstNuclear = getFirstExpression e
+getFirstTransition :: Expression ->  [Transition] -> Maybe [Transition]
+getFirstTransition e [] = Nothing
+getFirstTransition e t = getFirstTransitionAux e t []
+
+getFirstTransitionAux :: Expression -> [Transition] -> [Transition] -> Maybe [Transition]
+getFirstTransitionAux e [] l = Just l
+getFirstTransitionAux e ((current, next, Nuclear by):ts) l=
+  let
+    Just firstNuclear = getFirstExpression e
   in if by `elem` firstNuclear
-      then Just (current, next, Nuclear by)
-      else  getFirstTransition e ts
-
-
+     then getFirstTransitionAux e ts (l ++ [(current, next, Nuclear by)])
+     else getFirstTransitionAux e ts l
 
 getNextTransition :: [Transition] -> Maybe State -> Maybe Transition
 getNextTransition [] _ = Nothing
@@ -127,6 +136,8 @@ intersectTransitions _ _ = []
 
 unionTransitions :: Maybe [Transition] -> Maybe [Transition] -> [Transition]
 unionTransitions (Just t1) (Just t2) = t1 `union` t2
+unionTransitions Nothing (Just t2) = t2
+unionTransitions (Just t1) Nothing = t1
 unionTransitions _ _ = []
 
 -- Tem que programar o teste?
@@ -140,12 +151,12 @@ main = do
   -- A U (A ; B)
   -- let program = Binary Choice (Nuclear "A") (Binary Sequencial (Nuclear "A") (Nuclear "B"))
   -- (A?;(A;B))*;B
-  let program =  Binary Sequencial (Binary Choice (Nuclear "A") (Nuclear "B")) (Nuclear "B") -- Esse caso tá crashando 
+  let program =  Binary Sequencial (Binary Sequencial (Nuclear "A") (Nuclear "B")) (Nuclear "B") -- Esse caso tá crashando 
   -- print "Describe your program:"
   -- print "Describe your program:"
   -- rProgram <- getLine
   -- let program = read rProgram :: Expression
-  let tree = [("2", "3", Nuclear "B"),("1", "2", Nuclear "A")]
+  let tree = [("1", "2", Nuclear "A"),("2", "1", Nuclear "B"),("2", "4", Nuclear "B")]
   -- print "Write your transitions:"
   -- rTree <- getLine
   -- let tree = read rTree :: Transition
