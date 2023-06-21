@@ -57,22 +57,23 @@ checkForExpression :: [Transition] -> Expression -> Maybe Transition -> Expressi
 checkForExpression [] _ _ = Result False Nothing
 checkForExpression _ _ Nothing = Result False Nothing
 checkForExpression t (Nuclear idExpression) (Just (s,sNext,Nuclear i)) =
-  let 
+  let
     current = Just (s, sNext, Nuclear i)
     e = Nuclear idExpression
     isTransitionValid = i == idExpression
     newTransitions = deleteTransition t current
-  in 
+  in
     Result ( isTransitionValid &&  isJust current) (Just newTransitions)
 checkForExpression t (Binary Sequencial e1 e2) (Just (s,sNext, i)) =
-  let 
+  let
     currentResult = checkForExpression t e1 (Just (s,sNext, i))
-    nextResult = checkForExpression t e2 (getNextTransition t (Just sNext))
+    Result isOn (Just updatedList) = currentResult
+    nextResult = checkForExpression t e2 (getNextTransition updatedList (Just sNext))
     isTransitionValid = isOnProgram currentResult && isOnProgram nextResult
     newTransitions = intersectTransitions (stateTransition currentResult) (stateTransition nextResult)
   in Result isTransitionValid (Just newTransitions)
 checkForExpression t (Binary Choice e1 e2) s =
-  let 
+  let
     result1 = checkForExpression t e1 s
     result2 = checkForExpression t e2 s
     isTransitionValid = isOnProgram result1 || isOnProgram result2
@@ -80,12 +81,12 @@ checkForExpression t (Binary Choice e1 e2) s =
       unionTransitions (stateTransition result1) (stateTransition result2)
   in Result isTransitionValid (Just newTransitions)
 checkForExpression t (Uni Iteration e1) s =
-  let 
+  let
     result = checkForExpression t e1 s
-    isTransitionValid = isOnProgram result
-    newTransitions = stateTransition result
-  in 
-    Result isTransitionValid newTransitions
+    Result isO (Just newT) = result
+    tryAgain = checkForExpression newT (Uni Iteration e1)
+  in
+    Result isO (Just newT)
 checkForExpression ((a,b,i):ts) (Uni Test e1) s =
   Result (a==b) (Just ((a,b,i):ts))
 
@@ -140,24 +141,15 @@ unionTransitions Nothing (Just t2) = t2
 unionTransitions (Just t1) Nothing = t1
 unionTransitions _ _ = []
 
--- Tem que programar o teste?
--- 
--- 1 -> 2, 3-> 4
--- main :: IO ()
+-- ghc main.hs para compilar
 main :: IO ()
 main = do
-  -- A U B
-  -- let program = Binary Choice (Nuclear "A") (Nuclear "B")
-  -- A U (A ; B)
-  -- let program = Binary Choice (Nuclear "A") (Binary Sequencial (Nuclear "A") (Nuclear "B"))
-  -- (A?;(A;B))*;B
-  let program =  Binary Sequencial (Binary Sequencial (Nuclear "A") (Nuclear "B")) (Nuclear "B") -- Esse caso tá crashando 
-  -- print "Describe your program:"
-  -- print "Describe your program:"
-  -- rProgram <- getLine
-  -- let program = read rProgram :: Expression
-  let tree = [("1", "2", Nuclear "A"),("2", "1", Nuclear "B"),("2", "4", Nuclear "B")]
-  -- print "Write your transitions:"
-  -- rTree <- getLine
-  -- let tree = read rTree :: Transition
+  -- let program = Binary Sequencial (Nuclear "A") (Uni Iteration (Nuclear "B"))  
+  -- let tree = [("1", "2", Nuclear "A"),("2", "3", Nuclear "B"),("3", "4", Nuclear "B")]
+  print "Describe your program:"
+  rProgram <- getLine
+  let program = read rProgram :: Expression
+  print "Write your transitions:"
+  rTree <- getLine
+  let tree = read rTree :: [Transition]
   print (validateProgram tree program)
